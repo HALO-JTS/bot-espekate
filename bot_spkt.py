@@ -11,6 +11,10 @@ TG_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
 
 DEFAULT_LINK = "https://drive.google.com/file/d/17KmVFmPU-OZk0dBdbVgF7AZ6ayhGWPyl/view?usp=drivesdk"
 
+# Lokasi standar Mako Polsek Jatisrono
+LOKASI_SPKT = "MAKO POLSEK JATISRONO, KEC. JATISRONO"
+KOORDINAT_SPKT = "(-7.8273937, 111.1285440)"
+
 # ==========================================================
 # 1. KONFIGURASI 3 REGU PIKET SPKT & LINK FOLDER
 # Patokan mulai: 28 Oktober 2026 = Regu 1 (AIPTU SUTARMAN)
@@ -35,8 +39,13 @@ DAFTAR_REGU_SPKT = [
     },
 ]
 
-# 6 Kegiatan Harian Ka SPKT (4 kegiatan QW4 + QW3.2 + QW5.2)
+# 6 Kegiatan Harian Ka SPKT sesuai urutan di web Posko PBM
 DAFTAR_KEGIATAN_SPKT = [
+    {
+        "kode": "QW3.2",
+        "tab": "Bersih Judi Daring dan Penipuan Digital",
+        "nama": "Layanan aduan korban penipuan daring"
+    },
     {
         "kode": "QW4.1",
         "tab": "110 Respons Cepat, SPKT Ramah Korban",
@@ -58,11 +67,6 @@ DAFTAR_KEGIATAN_SPKT = [
         "nama": "Layanan ramah perempuan dan anak"
     },
     {
-        "kode": "QW3.2",
-        "tab": "Bersih Judi Daring dan Penipuan Digital",
-        "nama": "Layanan aduan korban penipuan daring"
-    },
-    {
         "kode": "QW5.2",
         "tab": "Perkara Terlacak, SP2HP Pasti",
         "nama": "Layanan informasi perkara"
@@ -79,7 +83,6 @@ def hitung_jadwal_regu_hari_ini():
 def kirim_notif_telegram(pesan, foto_path=None):
     if not TG_TOKEN or not TG_CHAT_ID:
         return
-    # Otomatis mengirim ke 3 User ID (atau lebih) yang dipisahkan koma (,)
     daftar_chat_id = [cid.strip() for cid in TG_CHAT_ID.split(",") if cid.strip()]
     for cid in daftar_chat_id:
         try:
@@ -136,6 +139,108 @@ def ambil_6_foto_harian_regu(page, folder_url, putaran_piket):
 
     return [(DEFAULT_LINK, i + 1, 1) for i in range(jumlah_giat)]
 
+def tutup_saran_jika_ada(page):
+    """Menutup kotak Saran atau keluhan 1 (tombol ×) tanpa menutup kotak Jenis laporan 1 / Layanan 1."""
+    try:
+        tombol_x = page.locator("xpath=//*[contains(text(), 'Saran atau keluhan')]/following::button[normalize-space()='×'][1]")
+        if tombol_x.count() > 0 and tombol_x.first.is_visible():
+            tombol_x.first.scroll_into_view_if_needed()
+            tombol_x.first.click()
+            page.wait_for_timeout(500)
+    except Exception:
+        pass
+
+def isi_lokasi_dan_koordinat(page):
+    try:
+        inp_tempat = page.locator("input[placeholder*='Nama tempat']")
+        for i in range(inp_tempat.count()):
+            if inp_tempat.nth(i).is_visible():
+                inp_tempat.nth(i).scroll_into_view_if_needed()
+                inp_tempat.nth(i).fill(LOKASI_SPKT)
+
+        inp_koord = page.locator("input[placeholder*='Tempel koordinat']")
+        for i in range(inp_koord.count()):
+            if inp_koord.nth(i).is_visible():
+                inp_koord.nth(i).scroll_into_view_if_needed()
+                inp_koord.nth(i).fill(KOORDINAT_SPKT)
+    except Exception:
+        pass
+
+def klik_jam_sekarang(page):
+    try:
+        btn_jam = page.get_by_role("button", name="Isi jam sekarang")
+        for i in range(btn_jam.count()):
+            if btn_jam.nth(i).is_visible():
+                btn_jam.nth(i).scroll_into_view_if_needed()
+                btn_jam.nth(i).click()
+                page.wait_for_timeout(500)
+    except Exception:
+        pass
+
+def pilih_dropdown_kedua_jika_ada(page):
+    """Memilih opsi pertama pada dropdown di dalam form (seperti Jenis laporan atau Sumber data panggilan 110)."""
+    try:
+        selects = page.locator("select")
+        for i in range(1, selects.count()):
+            if selects.nth(i).is_visible():
+                selects.nth(i).scroll_into_view_if_needed()
+                selects.nth(i).select_option(index=1)
+                page.wait_for_timeout(500)
+    except Exception:
+        pass
+
+def isi_angka_kosong_dengan_nol(page):
+    """Mengisi semua kotak angka yang masih kosong dengan '0' tanpa mengubah angka '1' pada Kegiatan judi daring."""
+    try:
+        num_inputs = page.locator("input[type='number']")
+        for i in range(num_inputs.count()):
+            el = num_inputs.nth(i)
+            if el.is_visible():
+                val = (el.input_value() or "").strip()
+                if val == "":
+                    el.scroll_into_view_if_needed()
+                    el.fill("0")
+    except Exception:
+        pass
+
+def klik_tombol_ya_atau_ada(page):
+    """Mengklik tombol 'Ya' atau 'Ada' pada pertanyaan wajib di bagian c."""
+    try:
+        btn_ya = page.get_by_role("button", name="Ya", exact=True)
+        if btn_ya.count() > 0 and btn_ya.first.is_visible():
+            btn_ya.first.scroll_into_view_if_needed()
+            btn_ya.first.click()
+            page.wait_for_timeout(400)
+            return
+
+        btn_ada = page.get_by_role("button", name="Ada", exact=True)
+        if btn_ada.count() > 0 and btn_ada.first.is_visible():
+            btn_ada.first.scroll_into_view_if_needed()
+            btn_ada.first.click()
+            page.wait_for_timeout(400)
+    except Exception:
+        pass
+
+def isi_link_foto_drive(page, link_foto):
+    try:
+        inputs_drive = page.locator("input[placeholder*='Google Drive'], input[placeholder*='drive.google.com']")
+        for i in range(inputs_drive.count()):
+            if inputs_drive.nth(i).is_visible():
+                inputs_drive.nth(i).scroll_into_view_if_needed()
+                inputs_drive.nth(i).fill(link_foto)
+    except Exception:
+        pass
+
+def klik_tetap_kirim_jika_ada(page):
+    try:
+        btn_tetap = page.get_by_role("button", name="Tetap kirim")
+        if btn_tetap.count() > 0 and btn_tetap.first.is_visible():
+            btn_tetap.first.scroll_into_view_if_needed()
+            btn_tetap.first.click()
+            page.wait_for_timeout(3000)
+    except Exception:
+        pass
+
 def jalankan_robot_spkt():
     data_regu, putaran_piket = hitung_jadwal_regu_hari_ini()
     nomor_regu = data_regu["regu"]
@@ -166,85 +271,95 @@ def jalankan_robot_spkt():
             page.goto("https://poskopbm.polri.go.id/input", timeout=60000, wait_until="domcontentloaded")
             page.wait_for_timeout(3000)
 
+            # 1. Login jika diminta
             if page.locator("input[type='password']").count() > 0:
                 page.locator("input[type='email'], input[type='text']").first.fill(EMAIL)
                 page.locator("input[type='password']").first.fill(PASSWORD)
                 page.get_by_role("button", name="Masuk").click()
                 page.wait_for_timeout(5000)
 
+            # 2. Isi Nama Pelapor & Pilih Jabatan Ka SPKT (6 kegiatan)
             page.get_by_label("Nama dan pangkat pelapor").fill(nama_petugas)
-            page.locator("select").first.select_option(label="Ka SPKT (6 kegiatan)")
+            select_jabatan = page.locator("select").first
+            opsi_spkt = select_jabatan.locator("option", has_text="SPKT").first
+            teks_jabatan = (opsi_spkt.text_content() or "").strip()
+            select_jabatan.select_option(label=teks_jabatan)
             page.wait_for_timeout(2500)
 
-            if page.get_by_role("button", name="Isi laporan").count() > 0:
-                page.get_by_role("button", name="Isi laporan").first.click()
-                page.wait_for_timeout(2000)
-
+            # 3. Eksekusi Berurutan 6 Kegiatan Ka SPKT
             for idx, item in enumerate(DAFTAR_KEGIATAN_SPKT):
                 kode = item["kode"]
                 nama_tab = item["tab"]
                 nama_giat = item["nama"]
                 link_foto, no_foto, tot_foto = enam_foto[idx]
 
-                # Jika sub-kegiatan belum terbuka di layar, klik tab Quick Wins-nya di bagian 2
-                if not page.get_by_text(nama_giat).first.is_visible():
-                    tombol_tab = page.get_by_text(nama_tab).last
-                    tombol_tab.scroll_into_view_if_needed()
-                    tombol_tab.click()
-                    page.wait_for_timeout(2000)
+                # Pastikan Nama Pelapor di atas tetap terisi
+                inp_pelapor = page.get_by_label("Nama dan pangkat pelapor")
+                if (inp_pelapor.input_value() or "").strip() == "":
+                    inp_pelapor.fill(nama_petugas)
 
-                giat_el = page.get_by_text(nama_giat).first
+                # Buka tab Quick Wins jika sub-kegiatan belum tampil di layar
+                if not page.get_by_text(kode).first.is_visible():
+                    tab_el = page.locator("button", has_text=nama_tab).last
+                    tab_el.scroll_into_view_if_needed()
+                    tab_el.click()
+                    page.wait_for_timeout(1500)
+
+                # Klik sub-kegiatan berdasarkan kodenya (QW3.2, QW4.1, dst.)
+                giat_el = page.get_by_text(kode).last
                 giat_el.scroll_into_view_if_needed()
                 giat_el.click()
-                page.wait_for_timeout(2000)
+                page.wait_for_timeout(2500)
 
-                # Isi Nama pejabat pelaksana
-                page.get_by_label("Nama dan pangkat pejabat pelaksana").fill(nama_petugas)
+                # Khusus QW3.2: Klik tombol '+' pada 'Kegiatan judi daring' agar kotak isian terbuka
+                if kode == "QW3.2":
+                    if page.get_by_text("KEGIATAN JUDI DARING 1").count() == 0:
+                        btn_plus = page.locator("xpath=//*[contains(text(), 'Kegiatan judi daring')]/following::button[normalize-space()='+'][1]")
+                        if btn_plus.count() > 0:
+                            btn_plus.first.scroll_into_view_if_needed()
+                            btn_plus.first.click()
+                            page.wait_for_timeout(1500)
 
-                # SEMUA KOTAK ANGKA DIISI "0"
-                num_inputs = page.locator("input[type='number']")
-                for i in range(num_inputs.count()):
-                    try:
-                        if num_inputs.nth(i).is_visible():
-                            num_inputs.nth(i).fill("0")
-                    except Exception:
-                        pass
+                # Khusus QW4.1, QW4.3, QW4.4, QW5.2: Klik tombol 'Ya' / 'Ada' pada pertanyaan poin c
+                if kode in ["QW4.1", "QW4.3", "QW4.4", "QW5.2"]:
+                    klik_tombol_ya_atau_ada(page)
 
-                # HAPUS / TUTUP KOTAK SARAN JIKA MUNCUL (×)
-                try:
-                    tombol_hapus_saran = page.locator("button").filter(has_text="×")
-                    for i in range(tombol_hapus_saran.count()):
-                        if tombol_hapus_saran.nth(i).is_visible():
-                            tombol_hapus_saran.nth(i).click()
-                            page.wait_for_timeout(500)
-                except Exception:
-                    pass
+                # Tutup kotak Saran atau keluhan 1 (×) terlebih dahulu
+                tutup_saran_jika_ada(page)
 
-                # Khusus QW4.4: pastikan tombol "Ada" terpilih
-                if kode == "QW4.4":
-                    tombol_ada = page.get_by_role("button", name="Ada", exact=True)
-                    if tombol_ada.count() > 0:
-                        tombol_ada.first.click()
+                # Isi Lokasi Kegiatan & Titik Koordinat
+                isi_lokasi_dan_koordinat(page)
 
-                # Isi Link Google Drive
-                inputs_drive = page.locator("input[placeholder*='drive.google.com']")
-                for i in range(inputs_drive.count()):
-                    if inputs_drive.nth(i).is_visible():
-                        inputs_drive.nth(i).fill(link_foto)
-                page.wait_for_timeout(1000)
+                # Klik tombol 'Isi jam sekarang' (jika ada pada form tersebut)
+                klik_jam_sekarang(page)
+
+                # Pilih dropdown tambahan di dalam form (Jenis laporan di QW4.2 / Sumber data di QW4.3)
+                pilih_dropdown_kedua_jika_ada(page)
+
+                # Isi semua kotak angka yang masih kosong dengan "0"
+                isi_angka_kosong_dengan_nol(page)
+
+                # Isi Link Foto Google Drive
+                isi_link_foto_drive(page, link_foto)
 
                 # Klik Kirim laporan
+                page.wait_for_timeout(1000)
                 btn_kirim = page.get_by_role("button", name="Kirim laporan")
                 btn_kirim.scroll_into_view_if_needed()
                 btn_kirim.click()
+                page.wait_for_timeout(2000)
+
+                # Klik 'Tetap kirim' jika muncul konfirmasi laporan serupa
+                klik_tetap_kirim_jika_ada(page)
                 page.wait_for_timeout(4000)
 
+                btn_kirim.scroll_into_view_if_needed()
                 ss_path = f"bukti_{kode.replace('.', '_')}.png"
                 page.screenshot(path=ss_path)
                 kirim_notif_telegram(
                     f"✅ Laporan SPKT {kode} berhasil dikirim!\n\n"
                     f"📌 Kegiatan: {nama_giat}\n"
-                    f"👮 Pelapor & Pelaksana: {nama_petugas} (Regu {nomor_regu})\n"
+                    f"👮 Pelapor: {nama_petugas} (Regu {nomor_regu})\n"
                     f"📸 Foto ke-{no_foto} dari {tot_foto} (Folder Regu {nomor_regu})\n"
                     f"🔗 Link: {link_foto}",
                     ss_path
